@@ -34,6 +34,15 @@ struct DepthStencilBuffer
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// Gpu structure
+///////////////////////////////////////////////////////////////////////////////////////////////////
+struct Gpu
+{
+    VkPhysicalDevice                    Device;
+    VkPhysicalDeviceMemoryProperties    MemoryProps;
+};
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 // SampleApp class
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 class SampleApp : public asvk::App
@@ -67,23 +76,31 @@ private:
     //=============================================================================================
     // private variables.
     //=============================================================================================
-    static constexpr uint32_t SwapChainCount = 3;
-    VkInstance                      m_Instance;
-    VkDevice                        m_Device;
-    std::vector<VkPhysicalDevice>   m_Gpus;
-    VkQueue                         m_GraphicsQueue;
-    VkFence                         m_GraphicsFence;
-    VkSemaphore                     m_GraphicsSemaphore;
-    uint32_t                        m_GraphicsFamilyIndex;
-    VkAllocationCallbacks           m_AllocatorCallbacks;
-    VkSurfaceKHR                    m_Surface;
-    VkSwapchainKHR                  m_SwapChain;
-    std::vector<Texture>            m_BackBuffers;
-    uint32_t                        m_BufferIndex;
-    VkCommandPool                   m_CommandPool;
-    std::vector<VkCommandBuffer>    m_CommandBuffers;
-    VkRenderPass                    m_RenderPass;
-    DepthStencilBuffer              m_Depth;
+    static constexpr uint32_t SwapChainCount = 2;
+    static constexpr uint64_t TimeOutNanoSec = 100000000;  // ナノ秒単位.
+    VkInstance                                      m_Instance;
+    VkDevice                                        m_Device;
+    std::vector<Gpu>                                m_Gpus;
+    VkQueue                                         m_GraphicsQueue;
+    VkFence                                         m_GraphicsFence;
+    VkSemaphore                                     m_GraphicsSemaphore;
+    uint32_t                                        m_GraphicsFamilyIndex;
+    VkAllocationCallbacks                           m_AllocatorCallbacks;
+    VkSurfaceKHR                                    m_Surface;
+    VkSwapchainKHR                                  m_SwapChain;
+    std::vector<Texture>                            m_BackBuffers;
+    uint32_t                                        m_BufferIndex;
+    VkCommandPool                                   m_CommandPool;
+    std::vector<VkCommandBuffer>                    m_CommandBuffers;
+    VkRenderPass                                    m_RenderPass;
+    DepthStencilBuffer                              m_Depth;
+    std::vector<VkFramebuffer>                      m_FrameBuffers;
+    VkCommandBufferBeginInfo                        m_CommandBufferBeginInfo;
+    VkRenderPassBeginInfo                           m_RenderPassBeginInfo;
+    VkViewport                                      m_Viewport;
+    VkRect2D                                        m_Scissor;
+    VkPipelineCache                                 m_PipelineCache;
+    VkPipeline                                      m_Pipeline;
 
     //=============================================================================================
     // private methods.

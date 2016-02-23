@@ -59,6 +59,54 @@ void VKAPI_CALL Free(void* pUserData, void* pMemory)
     _aligned_free( pMemory );
 }
 
+void SetImageLayout
+(
+    VkDevice            device,
+    VkCommandBuffer     commandBuffer,
+    VkImage             image, 
+    VkImageAspectFlags  aspectFlags, 
+    VkImageLayout       oldLayout,
+    VkImageLayout       newLayout
+)
+{
+    assert(device != nullptr);
+    assert(commandBuffer != nullptr);
+
+    VkImageMemoryBarrier barrier = {};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.pNext = nullptr;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = 0;
+    barrier.oldLayout = oldLayout;
+    barrier.newLayout = newLayout;
+    barrier.image = image;
+    barrier.subresourceRange = {aspectFlags, 0, 1, 0, 1};
+
+    if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
+    { barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT; }
+
+    if (newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
+    { barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; }
+
+    if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
+    { barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT; }
+
+    if (newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+    { barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_INPUT_ATTACHMENT_READ_BIT; }
+
+    vkCmdPipelineBarrier(
+        commandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        0,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        1,
+        &barrier);
+}
+
 } // namespace /* anonymous */
 
 
@@ -71,6 +119,7 @@ void VKAPI_CALL Free(void* pUserData, void* pMemory)
 //-------------------------------------------------------------------------------------------------
 SampleApp::SampleApp()
 : asvk::App( L"SampleApp", 960, 540, nullptr, nullptr, nullptr )
+, m_BufferIndex(0)
 { /* DO_NOTHING */ }
 
 //-------------------------------------------------------------------------------------------------
@@ -133,23 +182,34 @@ bool SampleApp::OnInit()
             return false;
         }
 
-        m_Gpus.resize(count);
-        result = vkEnumeratePhysicalDevices(m_Instance, &count, m_Gpus.data());
+        std::vector<VkPhysicalDevice> physicalDevices;
+        physicalDevices.resize(count);
+
+        result = vkEnumeratePhysicalDevices(m_Instance, &count, physicalDevices.data());
         if ( result != VK_SUCCESS )
         {
             ELOG( "Error : vkEnumeratePhysicalDevices() Failed." );
             return false;
         }
+
+        m_Gpus.resize(count);
+        for(auto i=0u; i<count; ++i)
+        {
+            m_Gpus[i].Device = physicalDevices[i];
+            vkGetPhysicalDeviceMemoryProperties(m_Gpus[i].Device, &m_Gpus[i].MemoryProps);
+        }
+
+        physicalDevices.clear();
     }
 
     // デバイスとキューの生成.
     {
         uint32_t propCount;
-        vkGetPhysicalDeviceQueueFamilyProperties(m_Gpus[0], &propCount, nullptr);
+        vkGetPhysicalDeviceQueueFamilyProperties(m_Gpus[0].Device, &propCount, nullptr);
 
         std::vector<VkQueueFamilyProperties> props;
         props.resize(propCount);
-        vkGetPhysicalDeviceQueueFamilyProperties(m_Gpus[0], &propCount, props.data());
+        vkGetPhysicalDeviceQueueFamilyProperties(m_Gpus[0].Device, &propCount, props.data());
 
         for(auto i=0u; i<propCount; ++i)
         {
@@ -176,7 +236,7 @@ bool SampleApp::OnInit()
         deviceInfo.ppEnabledExtensionNames  = nullptr;
         deviceInfo.pEnabledFeatures         = nullptr;
 
-        auto result = vkCreateDevice(m_Gpus[0], &deviceInfo, nullptr, &m_Device);
+        auto result = vkCreateDevice(m_Gpus[0].Device, &deviceInfo, nullptr, &m_Device);
         if ( result != VK_SUCCESS )
         {
             ELOG( "Error : vkCreateDevice() Failed." );
@@ -251,10 +311,239 @@ bool SampleApp::OnInit()
             ELOG( "Error : vkAllocateCommandBuffers() Failed." );
             return false;
         }
+
+        VkCommandBufferInheritanceInfo inheritanceInfo = {};
+        inheritanceInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+        inheritanceInfo.pNext                   = nullptr;
+        inheritanceInfo.renderPass              = nullptr;
+        inheritanceInfo.subpass                 = 0;
+        inheritanceInfo.framebuffer             = nullptr;
+        inheritanceInfo.occlusionQueryEnable    = VK_FALSE;
+        inheritanceInfo.queryFlags              = 0;
+        inheritanceInfo.pipelineStatistics      = 0;
+
+        VkCommandBufferBeginInfo beginInfo = {};
+        beginInfo.sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.pNext             = nullptr;
+        beginInfo.flags             = 0;
+        beginInfo.pInheritanceInfo  = &inheritanceInfo;
+
+        result = vkBeginCommandBuffer(m_CommandBuffers[m_BufferIndex], &beginInfo);
+        if (result != VK_SUCCESS)
+        {
+            ELOG( "Error : vkBeginCommandBuffer() Failed." );
+            return false;
+        }
+    }
+
+    // サーフェイスの生成.
+    {
+        VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
+        surfaceInfo.sType       = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+        surfaceInfo.pNext       = nullptr;
+        surfaceInfo.flags       = 0;
+        surfaceInfo.hinstance   = m_hInst;
+        surfaceInfo.hwnd        = m_hWnd;
+
+        auto result = vkCreateWin32SurfaceKHR(m_Instance, &surfaceInfo, nullptr, &m_Surface);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkCreateWin32SurfaceKHR() Failed." );
+            return false;
+        }
     }
 
     // スワップチェインの生成.
     {
+        uint32_t count  = 0;
+        auto result = vkGetPhysicalDeviceSurfaceFormatsKHR(m_Gpus[0].Device, m_Surface, &count, nullptr);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkGetPhysicalDeviceSurfaceFormatKHR() Failed." );
+            return false;
+        }
+
+        std::vector<VkSurfaceFormatKHR> formats;
+        formats.resize(count);
+        result = vkGetPhysicalDeviceSurfaceFormatsKHR(m_Gpus[0].Device, m_Surface, &count, formats.data());
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkGetPhysicalDeviceSUrfaceFormatsKHR() Failed." );
+            return false;
+        }
+
+        VkFormat        imageFormat     = VK_FORMAT_R8G8B8A8_UNORM;
+        VkColorSpaceKHR imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+
+        bool isFind = false;
+        for(size_t i=0; i<formats.size(); ++i)
+        {
+            if (imageFormat     == formats[i].format &&
+                imageColorSpace == formats[i].colorSpace)
+            { 
+                isFind = true;
+                break;
+            }
+        }
+
+        if (!isFind)
+        {
+            imageFormat     = formats[0].format;
+            imageColorSpace = formats[0].colorSpace;
+        }
+
+        VkSurfaceCapabilitiesKHR capabilities;
+        VkSurfaceTransformFlagBitsKHR preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
+        {
+            auto result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+                m_Gpus[0].Device,
+                m_Surface,
+                &capabilities);
+            if ( result != VK_SUCCESS )
+            {
+                ELOG( "Error : vkGetPhysicalDeviceSurfaceCapabilitiesKHR() Failed.");
+                return false;
+            }
+
+            if (!(capabilities.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR))
+            { preTransform = capabilities.currentTransform; }
+        }
+
+        VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR;
+        {
+            uint32_t presentModeCount;
+            result = vkGetPhysicalDeviceSurfacePresentModesKHR(
+                m_Gpus[0].Device,
+                m_Surface,
+                &presentModeCount,
+                nullptr);
+            if ( result != VK_SUCCESS )
+            {
+                ELOG( "Error : vkGetPhysicalDeviceSurfacePresentModesKHR() Failed." );
+                return false;
+            }
+
+            std::vector<VkPresentModeKHR> presentModes;
+            presentModes.resize(presentModeCount);
+            result = vkGetPhysicalDeviceSurfacePresentModesKHR(
+                m_Gpus[0].Device,
+                m_Surface,
+                &presentModeCount,
+                presentModes.data());
+            if ( result != VK_SUCCESS )
+            {
+                ELOG( "Error : vkGetPhysicalDeviceSurfacePresentModesKHR() Failed." );
+                return false;
+            }
+
+            for(size_t i=0; i<presentModes.size(); ++i)
+            {
+                if (presentModes[i] == VK_PRESENT_MODE_MAILBOX_KHR)
+                {
+                    presentMode = VK_PRESENT_MODE_MAILBOX_KHR;
+                    break;
+                }
+                if (presentModes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR)
+                {
+                    presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+                }
+            }
+
+            presentModes.clear();
+        }
+
+        uint32_t desiredSwapChainImageCount = capabilities.minImageCount + 1;
+        if ((capabilities.maxImageCount > 0) && (desiredSwapChainImageCount > capabilities.maxImageCount))
+        { desiredSwapChainImageCount = capabilities.maxImageCount; }
+
+        {
+            VkSwapchainCreateInfoKHR createInfo = {};
+            createInfo.sType                    = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+            createInfo.pNext                    = nullptr;
+            createInfo.flags                    = 0;
+            createInfo.surface                  = m_Surface;
+            createInfo.minImageCount            = desiredSwapChainImageCount;
+            createInfo.imageFormat              = imageFormat;
+            createInfo.imageColorSpace          = imageColorSpace;
+            createInfo.imageExtent              = { m_Width, m_Height };
+            createInfo.imageArrayLayers         = 1;
+            createInfo.imageUsage               = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+            createInfo.imageSharingMode         = VK_SHARING_MODE_EXCLUSIVE;
+            createInfo.queueFamilyIndexCount    = 0;
+            createInfo.pQueueFamilyIndices      = nullptr;
+            createInfo.preTransform             = preTransform;
+            createInfo.compositeAlpha           = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+            createInfo.presentMode              = presentMode;
+            createInfo.clipped                  = VK_TRUE;
+            createInfo.oldSwapchain             = nullptr;
+
+            auto result = vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain);
+            if ( result != VK_SUCCESS )
+            {
+                ELOG( "Error : vkCreateSwapChainKHR() Failed." );
+                return false;
+            }
+        }
+    }
+
+    // イメージの作成
+    {
+        uint32_t swapChainCount = 0;
+        auto result = vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &swapChainCount, nullptr);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkGetSwapChainImagesKHR() Failed." );
+            return false;
+        }
+
+        m_BackBuffers.resize(swapChainCount);
+
+        std::vector<VkImage> images;
+        images.resize(swapChainCount);
+        result = vkGetSwapchainImagesKHR(m_Device, m_SwapChain, &swapChainCount, images.data());
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkGetSwapChainImagesKHR() Failed." );
+            return false;
+        }
+
+        for(auto i=0u; i<swapChainCount; ++i)
+        { m_BackBuffers[i].Image = images[i]; }
+
+        images.clear();
+    }
+
+    // イメージビューの生成.
+    {
+        for(size_t i=0; i<m_BackBuffers.size(); ++i)
+        {
+            VkImageViewCreateInfo viewInfo = {};
+            viewInfo.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.pNext            = nullptr;
+            viewInfo.format           = VK_FORMAT_R8G8B8A8_UNORM;
+            viewInfo.components.r     = VK_COMPONENT_SWIZZLE_R;
+            viewInfo.components.g     = VK_COMPONENT_SWIZZLE_G;
+            viewInfo.components.b     = VK_COMPONENT_SWIZZLE_B;
+            viewInfo.components.a     = VK_COMPONENT_SWIZZLE_A;
+            viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            viewInfo.flags            = 0;
+            viewInfo.image            = m_BackBuffers[i].Image;
+
+            auto result = vkCreateImageView(m_Device, &viewInfo, nullptr, &m_BackBuffers[i].View);
+            if ( result != VK_SUCCESS )
+            {
+                ELOG( "Error : vkCreateImageView() Failed." );
+                return false;
+            }
+
+            SetImageLayout(
+                m_Device,
+                m_CommandBuffers[m_BufferIndex],
+                m_BackBuffers[i].Image,
+                VK_IMAGE_ASPECT_COLOR_BIT, 
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        }
     }
 
     // 深度ステンシルバッファの生成.
@@ -263,7 +552,7 @@ bool SampleApp::OnInit()
 
         VkImageTiling tiling;
         VkFormatProperties props;
-        vkGetPhysicalDeviceFormatProperties(m_Gpus[0], depthFormat, &props);
+        vkGetPhysicalDeviceFormatProperties(m_Gpus[0].Device, depthFormat, &props);
 
         if (props.linearTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)
         { tiling = VK_IMAGE_TILING_LINEAR; }
@@ -303,11 +592,27 @@ bool SampleApp::OnInit()
         VkMemoryRequirements requirements;
         vkGetImageMemoryRequirements(m_Device, m_Depth.Image, &requirements);
 
+        VkFlags requirementsMask = 0;
+        uint32_t typeBits  = requirements.memoryTypeBits;
+        uint32_t typeIndex = 0;
+        for(auto i=0u; i<32; ++i)
+        {
+            if ((typeBits & 0x1) == 1)
+            {
+                if ((m_Gpus[0].MemoryProps.memoryTypes[i].propertyFlags & requirementsMask) == requirementsMask)
+                {
+                    typeIndex = i;
+                    break;
+                }
+            }
+            typeBits >>= 1;
+        }
+
         VkMemoryAllocateInfo allocInfo = {};
         allocInfo.sType             = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.pNext             = nullptr;
         allocInfo.allocationSize    = requirements.size;
-        allocInfo.memoryTypeIndex   = 0;
+        allocInfo.memoryTypeIndex   = typeIndex;
 
         result = vkAllocateMemory(m_Device, &allocInfo, nullptr, &m_Depth.Memory);
         if (result != VK_SUCCESS)
@@ -346,46 +651,333 @@ bool SampleApp::OnInit()
             ELOG( "Error : vkCreateImageView() Failed." );
             return false;
         }
-    }
 
-    // ユニフォームバッファの生成.
-    {
-    }
-
-    // ディスクリプタとパイプライのレイアウトの初期化.
-    {
-    }
-
-    // レンダーパスの生成.
-    {
-    }
-
-    // シェーダの生成.
-    {
+        SetImageLayout(
+            m_Device,
+            m_CommandBuffers[m_BufferIndex],
+            m_Depth.Image,
+            VK_IMAGE_ASPECT_DEPTH_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
     }
 
     // フレームバッファの生成.
     {
+        VkImageView attachments[2];
+
+        VkFramebufferCreateInfo info = {};
+        info.sType              = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        info.pNext              = nullptr;
+        info.renderPass         = nullptr;
+        info.attachmentCount    = 2;
+        info.pAttachments       = attachments;
+        info.width              = m_Width;
+        info.height             = m_Height;
+        info.layers             = 1;
+
+        m_FrameBuffers.resize(SwapChainCount);
+        for(auto i=0u; i<SwapChainCount; ++i)
+        {
+            attachments[0] = m_BackBuffers[i].View;
+            attachments[1] = m_Depth.View;
+            auto result = vkCreateFramebuffer(m_Device, &info, nullptr, &m_FrameBuffers[i]);
+            if ( result != VK_SUCCESS )
+            {
+                ELOG( "Error : vkCreateFramebuffer() Failed." );
+                return false;
+            }
+        }
     }
 
-    // 頂点バッファの生成.
+    // レンダーパスの生成.
     {
+        VkAttachmentDescription attachments[2];
+        attachments[0].format           = VK_FORMAT_R8G8B8A8_UNORM;
+        attachments[0].samples          = VK_SAMPLE_COUNT_1_BIT;
+        attachments[0].loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[0].storeOp          = VK_ATTACHMENT_STORE_OP_STORE;
+        attachments[0].stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[0].stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[0].initialLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[0].finalLayout      = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        attachments[0].flags            = 0;
+
+        attachments[1].format           = VK_FORMAT_D24_UNORM_S8_UINT;
+        attachments[1].samples          = VK_SAMPLE_COUNT_1_BIT;
+        attachments[1].loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachments[1].storeOp          = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[1].stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachments[1].stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachments[1].initialLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[1].finalLayout      = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        attachments[1].flags            = 0;
+
+        VkAttachmentReference colorReference = {};
+        colorReference.attachment   = 0;
+        colorReference.layout       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkAttachmentReference depthReference = {};
+        depthReference.attachment   = 1;
+        depthReference.layout       = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass = {};
+        subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.flags                   = 0;
+        subpass.inputAttachmentCount    = 0;
+        subpass.pInputAttachments       = nullptr;
+        subpass.colorAttachmentCount    = 1;
+        subpass.pColorAttachments       = &colorReference;
+        subpass.pResolveAttachments     = nullptr;
+        subpass.pDepthStencilAttachment = &depthReference;
+        subpass.preserveAttachmentCount = 0;
+        subpass.pPreserveAttachments    = nullptr;
+
+        VkRenderPassCreateInfo passInfo = {};
+        passInfo.sType              = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        passInfo.pNext              = nullptr;
+        passInfo.attachmentCount    = 2;
+        passInfo.pAttachments       = attachments;
+        passInfo.subpassCount       = 1;
+        passInfo.pSubpasses         = &subpass;
+        passInfo.dependencyCount    = 0;
+        passInfo.pDependencies      = nullptr;
+
+        auto result = vkCreateRenderPass(m_Device, &passInfo, nullptr, &m_RenderPass);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkCreateRenderPass() Failed." );
+            return false;
+        }
     }
 
-    // ディスクリプタプールの生成
     {
-    }
+        VkClearValue clearValues[2];
+        clearValues[0].color.float32[0] = 0.2f;
+        clearValues[0].color.float32[1] = 0.2f;
+        clearValues[0].color.float32[2] = 0.2f;
+        clearValues[0].color.float32[3] = 1.0f;
+        clearValues[1].depthStencil = { 1.0f, 0 };
 
-    // ディスクリプタ―セットの生成.
-    {
+        VkRenderPassBeginInfo passBeginInfo = {};
+        passBeginInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        passBeginInfo.pNext             = nullptr;
+        passBeginInfo.renderPass        = m_RenderPass;
+        passBeginInfo.framebuffer       = m_FrameBuffers[m_BufferIndex];
+        passBeginInfo.renderArea.offset = { 0, 0 };
+        passBeginInfo.renderArea.extent = { m_Width, m_Height };
+        passBeginInfo.clearValueCount   = 2;
+        passBeginInfo.pClearValues      = clearValues;
+
+        VkCommandBufferInheritanceInfo inheritanceInfo = {};
+        inheritanceInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+        inheritanceInfo.pNext                   = nullptr;
+        inheritanceInfo.renderPass              = nullptr;
+        inheritanceInfo.subpass                 = 0;
+        inheritanceInfo.framebuffer             = nullptr;
+        inheritanceInfo.occlusionQueryEnable    = VK_FALSE;
+        inheritanceInfo.queryFlags              = 0;
+        inheritanceInfo.pipelineStatistics      = 0;
+
+        VkCommandBufferBeginInfo cmdBeginInfo = {};
+        cmdBeginInfo.sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        cmdBeginInfo.pNext             = nullptr;
+        cmdBeginInfo.flags             = 0;
+        cmdBeginInfo.pInheritanceInfo  = &inheritanceInfo;
+
+        m_RenderPassBeginInfo    = passBeginInfo;
+        m_CommandBufferBeginInfo = cmdBeginInfo;
+
+        m_Viewport.x        = 0.0f;
+        m_Viewport.y        = 0.0f;
+        m_Viewport.width    = static_cast<float>(m_Width);
+        m_Viewport.height   = static_cast<float>(m_Height);
+        m_Viewport.minDepth = 0.0f;
+        m_Viewport.maxDepth = 1.0f;
+
+        m_Scissor.offset = { 0, 0 };
+        m_Scissor.extent = { m_Width, m_Height };
     }
 
     // パイプラインキャッシュの生成.
     {
+        VkPipelineCacheCreateInfo info = {};
+        info.sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+        info.pNext           = nullptr;
+        info.initialDataSize = 0;
+        info.pInitialData    = nullptr;
+        info.flags           = 0;
+
+        auto result = vkCreatePipelineCache(m_Device, &info, nullptr, &m_PipelineCache);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkCreatePipelineCache() Failed." );
+            return false;
+        }
     }
 
     // パイプラインの生成.
     {
+        VkDynamicState dynamicStateEnables[VK_DYNAMIC_STATE_RANGE_SIZE];
+
+        VkPipelineDynamicStateCreateInfo dynamicCreateInfo = {};
+        dynamicCreateInfo.sType              = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicCreateInfo.pNext              = nullptr;
+        dynamicCreateInfo.pDynamicStates     = dynamicStateEnables;
+        dynamicCreateInfo.dynamicStateCount  = 0;
+
+        VkPipelineVertexInputStateCreateInfo visCreateInfo = {};
+        visCreateInfo.sType                             = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+        visCreateInfo.pNext                             = nullptr;
+        visCreateInfo.flags                             = 0;
+        visCreateInfo.vertexBindingDescriptionCount     = 0;
+        visCreateInfo.pVertexBindingDescriptions        = nullptr;
+        visCreateInfo.vertexAttributeDescriptionCount   = 0;
+        visCreateInfo.pVertexAttributeDescriptions      = nullptr;
+
+        VkPipelineInputAssemblyStateCreateInfo iasCreateInfo = {};
+        iasCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        iasCreateInfo.pNext                  = nullptr;
+        iasCreateInfo.flags                  = 0;
+        iasCreateInfo.primitiveRestartEnable = VK_FALSE;
+        iasCreateInfo.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+        VkPipelineRasterizationStateCreateInfo rsCreateInfo = {};
+        rsCreateInfo.sType                      = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        rsCreateInfo.pNext                      = nullptr;
+        rsCreateInfo.polygonMode                = VK_POLYGON_MODE_FILL;
+        rsCreateInfo.cullMode                   = VK_CULL_MODE_BACK_BIT;
+        rsCreateInfo.frontFace                  = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        rsCreateInfo.depthClampEnable           = VK_TRUE;
+        rsCreateInfo.rasterizerDiscardEnable    = VK_FALSE;
+        rsCreateInfo.depthBiasEnable            = VK_FALSE;
+        rsCreateInfo.depthBiasConstantFactor    = 0;
+        rsCreateInfo.depthBiasClamp             = 0;
+        rsCreateInfo.depthBiasSlopeFactor       = 0;
+        rsCreateInfo.lineWidth                  = 0;
+
+        VkPipelineColorBlendAttachmentState cbaState;
+        cbaState.colorWriteMask         = 0xf;
+        cbaState.blendEnable            = VK_FALSE;
+        cbaState.alphaBlendOp           = VK_BLEND_OP_ADD;
+        cbaState.colorBlendOp           = VK_BLEND_OP_ADD;
+        cbaState.srcColorBlendFactor    = VK_BLEND_FACTOR_ZERO;
+        cbaState.dstColorBlendFactor    = VK_BLEND_FACTOR_ZERO;
+        cbaState.srcAlphaBlendFactor    = VK_BLEND_FACTOR_ZERO;
+        cbaState.dstAlphaBlendFactor    = VK_BLEND_FACTOR_ZERO;
+
+        VkPipelineColorBlendStateCreateInfo cbsCreateInfo = {};
+        cbsCreateInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        cbsCreateInfo.pNext             = nullptr;
+        cbsCreateInfo.flags             = 0;
+        cbsCreateInfo.attachmentCount   = 1;
+        cbsCreateInfo.pAttachments      = &cbaState;
+        cbsCreateInfo.logicOpEnable     = VK_FALSE;
+        cbsCreateInfo.logicOp           = VK_LOGIC_OP_NO_OP;
+        cbsCreateInfo.blendConstants[0] = 1.0f;
+        cbsCreateInfo.blendConstants[1] = 1.0f;
+        cbsCreateInfo.blendConstants[2] = 1.0f;
+        cbsCreateInfo.blendConstants[3] = 1.0f;
+
+        VkPipelineViewportStateCreateInfo vpsCreateInfo = {};
+        vpsCreateInfo.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        vpsCreateInfo.pNext         = nullptr;
+        vpsCreateInfo.flags         = 0;
+        vpsCreateInfo.viewportCount = 1;
+        vpsCreateInfo.scissorCount  = 1;
+        vpsCreateInfo.pViewports    = nullptr;
+        vpsCreateInfo.pScissors     = nullptr;
+
+        auto idx = 0;
+        dynamicStateEnables[idx++] = VK_DYNAMIC_STATE_VIEWPORT;
+        dynamicStateEnables[idx++] = VK_DYNAMIC_STATE_SCISSOR;
+
+        VkPipelineDepthStencilStateCreateInfo dsCreateInfo = {};
+        dsCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+        dsCreateInfo.pNext                  = nullptr;
+        dsCreateInfo.flags                  = 0;
+        dsCreateInfo.depthTestEnable        = VK_TRUE;
+        dsCreateInfo.depthWriteEnable       = VK_TRUE;
+        dsCreateInfo.depthCompareOp         = VK_COMPARE_OP_LESS_OR_EQUAL;
+        dsCreateInfo.depthBoundsTestEnable  = VK_FALSE;
+        dsCreateInfo.minDepthBounds         = 0;
+        dsCreateInfo.maxDepthBounds         = 0;
+        dsCreateInfo.stencilTestEnable      = VK_FALSE;
+        dsCreateInfo.back.failOp            = VK_STENCIL_OP_KEEP;
+        dsCreateInfo.back.passOp            = VK_STENCIL_OP_KEEP;
+        dsCreateInfo.back.compareOp         = VK_COMPARE_OP_ALWAYS;
+        dsCreateInfo.back.compareMask       = 0;
+        dsCreateInfo.back.reference         = 0;
+        dsCreateInfo.back.depthFailOp       = VK_STENCIL_OP_KEEP;
+        dsCreateInfo.front                  = dsCreateInfo.back;
+
+        VkPipelineMultisampleStateCreateInfo msCreateInfo = {};
+        msCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        msCreateInfo.pNext                  = nullptr;
+        msCreateInfo.flags                  = 0;
+        msCreateInfo.pSampleMask            = nullptr;
+        msCreateInfo.rasterizationSamples   = VK_SAMPLE_COUNT_1_BIT;
+        msCreateInfo.sampleShadingEnable    = VK_FALSE;
+        msCreateInfo.alphaToCoverageEnable  = VK_FALSE;
+        msCreateInfo.alphaToOneEnable       = VK_FALSE;
+        msCreateInfo.minSampleShading       = 0.0f;
+
+
+    }
+
+    // コマンドを実行しておく.
+    {
+        auto result = vkEndCommandBuffer(m_CommandBuffers[m_BufferIndex]);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkEndCommandBuffer() Failed." );
+            return false;
+        }
+
+        VkPipelineStageFlags pipeStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+
+        VkSubmitInfo info = {};
+        info.sType                  = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        info.pNext                  = nullptr;
+        info.waitSemaphoreCount     = 0;
+        info.pWaitSemaphores        = nullptr;
+        info.pWaitDstStageMask      = &pipeStageFlags;
+        info.commandBufferCount     = 1;
+        info.pCommandBuffers        = &m_CommandBuffers[m_BufferIndex];
+        info.signalSemaphoreCount   = 0;
+        info.pSignalSemaphores      = nullptr;
+
+        result = vkQueueSubmit(m_GraphicsQueue, 1, &info, m_GraphicsFence);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkQueueSubmit() Failed." );
+            return false;
+        }
+
+        do {
+            result = vkWaitForFences(m_Device, 1, &m_GraphicsFence, VK_TRUE, TimeOutNanoSec);
+        } while( result == VK_TIMEOUT );
+
+        result = vkQueueWaitIdle(m_GraphicsQueue);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkQueueWaitIdle() Failed." );
+            return false;
+        }
+    }
+
+    // フレームを用意.
+    {
+        auto result = vkAcquireNextImageKHR(
+            m_Device,
+            m_SwapChain,
+            UINT64_MAX,
+            m_GraphicsSemaphore,
+            nullptr, 
+            &m_BufferIndex);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkAcquireNextImageKHR() Failed." );
+        }
     }
 
     return true;
@@ -396,6 +988,15 @@ bool SampleApp::OnInit()
 //-------------------------------------------------------------------------------------------------
 void SampleApp::OnTerm()
 {
+    if(m_Pipeline != nullptr)
+    { vkDestroyPipeline(m_Device, m_Pipeline, nullptr); }
+
+    if (m_PipelineCache != nullptr)
+    { vkDestroyPipelineCache(m_Device, m_PipelineCache, nullptr); }
+
+    for(auto i=0u; i<SwapChainCount; ++i)
+    { vkDestroyFramebuffer(m_Device, m_FrameBuffers[i], nullptr); }
+
     if (m_Depth.View != nullptr)
     { vkDestroyImageView(m_Device, m_Depth.View, nullptr); }
 
@@ -423,7 +1024,8 @@ void SampleApp::OnTerm()
     if (m_Instance != nullptr)
     { vkDestroyInstance(m_Instance, &m_AllocatorCallbacks); }
 
-    m_Gpus.clear();
+    m_FrameBuffers  .clear();
+    m_Gpus          .clear();
     m_CommandBuffers.clear();
 
     m_GraphicsFamilyIndex = 0;
@@ -442,4 +1044,99 @@ void SampleApp::OnTerm()
 void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
 {
     ASVK_UNUSED(args);
+    auto cmd = m_CommandBuffers[m_BufferIndex];
+
+    vkBeginCommandBuffer(cmd, &m_CommandBufferBeginInfo);
+    vkCmdBeginRenderPass(cmd, &m_RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdSetViewport(cmd, 0, 1, &m_Viewport);
+    vkCmdSetScissor (cmd, 0, 1, &m_Scissor);
+
+    vkCmdEndRenderPass(cmd);
+    vkEndCommandBuffer(cmd);
+
+    {
+        VkImageMemoryBarrier barrier = {};
+        barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.pNext                           = nullptr;
+        barrier.srcAccessMask                   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier.dstAccessMask                   = VK_ACCESS_MEMORY_READ_BIT;
+        barrier.oldLayout                       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier.newLayout                       = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel   = 0;
+        barrier.subresourceRange.levelCount     = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount     = 1;
+        barrier.image                           = m_BackBuffers[m_BufferIndex].Image;
+
+        vkCmdPipelineBarrier(
+            cmd,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            0,
+            0,
+            nullptr,
+            0,
+            nullptr,
+            1,
+            &barrier);
+    }
+
+    {
+        VkPipelineStageFlags pipeStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+
+        VkSubmitInfo info = {};
+        info.sType                  = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        info.pNext                  = nullptr;
+        info.waitSemaphoreCount     = 0;
+        info.pWaitSemaphores        = nullptr;
+        info.pWaitDstStageMask      = &pipeStageFlags;
+        info.commandBufferCount     = 1;
+        info.pCommandBuffers        = &m_CommandBuffers[m_BufferIndex];
+        info.signalSemaphoreCount   = 0;
+        info.pSignalSemaphores      = nullptr;
+
+        auto result = vkQueueSubmit(m_GraphicsQueue, 1, &info, m_GraphicsFence);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkQueueSubmit() Failed." );
+        }
+
+        VkPresentInfoKHR present = {};
+        present.sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present.pNext               = nullptr;
+        present.swapchainCount      = 1;
+        present.pSwapchains         = &m_SwapChain;
+        present.pImageIndices       = &m_BufferIndex;
+        present.pWaitSemaphores     = nullptr;
+        present.waitSemaphoreCount  = 0;
+        present.pResults            = nullptr;
+
+        do {
+            result = vkWaitForFences(m_Device, 1, &m_GraphicsFence, VK_TRUE, TimeOutNanoSec);
+        } while( result == VK_TIMEOUT );
+
+        result = vkQueuePresentKHR(m_GraphicsQueue, &present);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkQueuePresentKHR() Failed." );
+        }
+    }
+
+    {
+        auto result = vkAcquireNextImageKHR(
+            m_Device,
+            m_SwapChain,
+            UINT64_MAX,
+            m_GraphicsSemaphore,
+            nullptr, 
+            &m_BufferIndex);
+        if ( result != VK_SUCCESS )
+        {
+            ELOG( "Error : vkAcquireNextImageKHR() Failed." );
+        }
+    }
 }
