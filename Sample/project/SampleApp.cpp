@@ -59,6 +59,9 @@ void VKAPI_CALL Free(void* pUserData, void* pMemory)
     _aligned_free( pMemory );
 }
 
+//-------------------------------------------------------------------------------------------------
+//      イメージレイアウトを設定します.
+//-------------------------------------------------------------------------------------------------
 void SetImageLayout
 (
     VkDevice            device,
@@ -73,14 +76,14 @@ void SetImageLayout
     assert(commandBuffer != nullptr);
 
     VkImageMemoryBarrier barrier = {};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.pNext = nullptr;
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = 0;
-    barrier.oldLayout = oldLayout;
-    barrier.newLayout = newLayout;
-    barrier.image = image;
-    barrier.subresourceRange = {aspectFlags, 0, 1, 0, 1};
+    barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.pNext               = nullptr;
+    barrier.srcAccessMask       = 0;
+    barrier.dstAccessMask       = 0;
+    barrier.oldLayout           = oldLayout;
+    barrier.newLayout           = newLayout;
+    barrier.image               = image;
+    barrier.subresourceRange    = {aspectFlags, 0, 1, 0, 1};
 
     if (newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL)
     { barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT; }
@@ -119,7 +122,16 @@ void SetImageLayout
 //-------------------------------------------------------------------------------------------------
 SampleApp::SampleApp()
 : asvk::App( L"SampleApp", 960, 540, nullptr, nullptr, nullptr )
-, m_BufferIndex(0)
+, m_Instance            (nullptr)
+, m_Device              (nullptr)
+, m_GraphicsQueue       (nullptr)
+, m_GraphicsFence       (nullptr)
+, m_GraphicsSemaphore   (nullptr)
+, m_GraphicsFamilyIndex (0)
+, m_Surface             (nullptr)
+, m_SwapChain           (nullptr)
+, m_BufferIndex         (0)
+, m_CommandPool         (nullptr)
 { /* DO_NOTHING */ }
 
 //-------------------------------------------------------------------------------------------------
@@ -525,7 +537,7 @@ bool SampleApp::OnInit()
             viewInfo.components.g     = VK_COMPONENT_SWIZZLE_G;
             viewInfo.components.b     = VK_COMPONENT_SWIZZLE_B;
             viewInfo.components.a     = VK_COMPONENT_SWIZZLE_A;
-            viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
             viewInfo.flags            = 0;
             viewInfo.image            = m_BackBuffers[i].Image;
 
@@ -689,67 +701,6 @@ bool SampleApp::OnInit()
         }
     }
 
-    // レンダーパスの生成.
-    {
-        VkAttachmentDescription attachments[2];
-        attachments[0].format           = VK_FORMAT_R8G8B8A8_UNORM;
-        attachments[0].samples          = VK_SAMPLE_COUNT_1_BIT;
-        attachments[0].loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        attachments[0].storeOp          = VK_ATTACHMENT_STORE_OP_STORE;
-        attachments[0].stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachments[0].stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachments[0].initialLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachments[0].finalLayout      = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        attachments[0].flags            = 0;
-
-        attachments[1].format           = VK_FORMAT_D24_UNORM_S8_UINT;
-        attachments[1].samples          = VK_SAMPLE_COUNT_1_BIT;
-        attachments[1].loadOp           = VK_ATTACHMENT_LOAD_OP_CLEAR;
-        attachments[1].storeOp          = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachments[1].stencilLoadOp    = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachments[1].stencilStoreOp   = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachments[1].initialLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        attachments[1].finalLayout      = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-        attachments[1].flags            = 0;
-
-        VkAttachmentReference colorReference = {};
-        colorReference.attachment   = 0;
-        colorReference.layout       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkAttachmentReference depthReference = {};
-        depthReference.attachment   = 1;
-        depthReference.layout       = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass = {};
-        subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.flags                   = 0;
-        subpass.inputAttachmentCount    = 0;
-        subpass.pInputAttachments       = nullptr;
-        subpass.colorAttachmentCount    = 1;
-        subpass.pColorAttachments       = &colorReference;
-        subpass.pResolveAttachments     = nullptr;
-        subpass.pDepthStencilAttachment = &depthReference;
-        subpass.preserveAttachmentCount = 0;
-        subpass.pPreserveAttachments    = nullptr;
-
-        VkRenderPassCreateInfo passInfo = {};
-        passInfo.sType              = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        passInfo.pNext              = nullptr;
-        passInfo.attachmentCount    = 2;
-        passInfo.pAttachments       = attachments;
-        passInfo.subpassCount       = 1;
-        passInfo.pSubpasses         = &subpass;
-        passInfo.dependencyCount    = 0;
-        passInfo.pDependencies      = nullptr;
-
-        auto result = vkCreateRenderPass(m_Device, &passInfo, nullptr, &m_RenderPass);
-        if ( result != VK_SUCCESS )
-        {
-            ELOG( "Error : vkCreateRenderPass() Failed." );
-            return false;
-        }
-    }
-
     // コマンドを実行しておく.
     {
         auto result = vkEndCommandBuffer(m_CommandBuffers[m_BufferIndex]);
@@ -838,6 +789,12 @@ void SampleApp::OnTerm()
     if (m_GraphicsFence != nullptr)
     { vkDestroyFence(m_Device, m_GraphicsFence, nullptr); }
 
+    if (m_SwapChain != nullptr)
+    { vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr); }
+
+    if (m_Surface != nullptr)
+    { vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); }
+
     if (m_Device != nullptr)
     { vkDestroyDevice(m_Device, nullptr); }
 
@@ -850,6 +807,8 @@ void SampleApp::OnTerm()
 
     m_GraphicsFamilyIndex = 0;
 
+    m_Surface           = nullptr;
+    m_SwapChain         = nullptr;
     m_CommandPool       = nullptr;
     m_GraphicsSemaphore = nullptr;
     m_GraphicsFence     = nullptr;

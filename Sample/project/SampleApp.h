@@ -77,24 +77,24 @@ private:
     // private variables.
     //=============================================================================================
     static constexpr uint32_t SwapChainCount = 2;
-    static constexpr uint64_t TimeOutNanoSec = 100000000;  // ナノ秒単位.
-    VkInstance                                      m_Instance;
-    VkDevice                                        m_Device;
-    std::vector<Gpu>                                m_Gpus;
-    VkQueue                                         m_GraphicsQueue;
-    VkFence                                         m_GraphicsFence;
-    VkSemaphore                                     m_GraphicsSemaphore;
-    uint32_t                                        m_GraphicsFamilyIndex;
-    VkAllocationCallbacks                           m_AllocatorCallbacks;
-    VkSurfaceKHR                                    m_Surface;
-    VkSwapchainKHR                                  m_SwapChain;
-    std::vector<Texture>                            m_BackBuffers;
-    uint32_t                                        m_BufferIndex;
-    VkCommandPool                                   m_CommandPool;
-    std::vector<VkCommandBuffer>                    m_CommandBuffers;
-    VkRenderPass                                    m_RenderPass;
-    DepthStencilBuffer                              m_Depth;
-    std::vector<VkFramebuffer>                      m_FrameBuffers;
+    static constexpr uint64_t TimeOutNanoSec = 100000000;
+    VkInstance                      m_Instance;
+    VkDevice                        m_Device;
+    std::vector<Gpu>                m_Gpus;
+    VkQueue                         m_GraphicsQueue;
+    VkFence                         m_GraphicsFence;
+    VkSemaphore                     m_GraphicsSemaphore;
+    uint32_t                        m_GraphicsFamilyIndex;
+    VkAllocationCallbacks           m_AllocatorCallbacks;
+    VkSurfaceKHR                    m_Surface;
+    VkSwapchainKHR                  m_SwapChain;
+    std::vector<Texture>            m_BackBuffers;
+    uint32_t                        m_BufferIndex;
+    VkCommandPool                   m_CommandPool;
+    std::vector<VkCommandBuffer>    m_CommandBuffers;
+    VkRenderPass                    m_RenderPass;
+    DepthStencilBuffer              m_Depth;
+    std::vector<VkFramebuffer>      m_FrameBuffers;
 
     //=============================================================================================
     // private methods.
