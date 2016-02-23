@@ -95,12 +95,6 @@ private:
     VkRenderPass                                    m_RenderPass;
     DepthStencilBuffer                              m_Depth;
     std::vector<VkFramebuffer>                      m_FrameBuffers;
-    VkCommandBufferBeginInfo                        m_CommandBufferBeginInfo;
-    VkRenderPassBeginInfo                           m_RenderPassBeginInfo;
-    VkViewport                                      m_Viewport;
-    VkRect2D                                        m_Scissor;
-    VkPipelineCache                                 m_PipelineCache;
-    VkPipeline                                      m_Pipeline;
 
     //=============================================================================================
     // private methods.

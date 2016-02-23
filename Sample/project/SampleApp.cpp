@@ -750,180 +750,6 @@ bool SampleApp::OnInit()
         }
     }
 
-    {
-        VkClearValue clearValues[2];
-        clearValues[0].color.float32[0] = 0.2f;
-        clearValues[0].color.float32[1] = 0.2f;
-        clearValues[0].color.float32[2] = 0.2f;
-        clearValues[0].color.float32[3] = 1.0f;
-        clearValues[1].depthStencil = { 1.0f, 0 };
-
-        VkRenderPassBeginInfo passBeginInfo = {};
-        passBeginInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        passBeginInfo.pNext             = nullptr;
-        passBeginInfo.renderPass        = m_RenderPass;
-        passBeginInfo.framebuffer       = m_FrameBuffers[m_BufferIndex];
-        passBeginInfo.renderArea.offset = { 0, 0 };
-        passBeginInfo.renderArea.extent = { m_Width, m_Height };
-        passBeginInfo.clearValueCount   = 2;
-        passBeginInfo.pClearValues      = clearValues;
-
-        VkCommandBufferInheritanceInfo inheritanceInfo = {};
-        inheritanceInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-        inheritanceInfo.pNext                   = nullptr;
-        inheritanceInfo.renderPass              = nullptr;
-        inheritanceInfo.subpass                 = 0;
-        inheritanceInfo.framebuffer             = nullptr;
-        inheritanceInfo.occlusionQueryEnable    = VK_FALSE;
-        inheritanceInfo.queryFlags              = 0;
-        inheritanceInfo.pipelineStatistics      = 0;
-
-        VkCommandBufferBeginInfo cmdBeginInfo = {};
-        cmdBeginInfo.sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        cmdBeginInfo.pNext             = nullptr;
-        cmdBeginInfo.flags             = 0;
-        cmdBeginInfo.pInheritanceInfo  = &inheritanceInfo;
-
-        m_RenderPassBeginInfo    = passBeginInfo;
-        m_CommandBufferBeginInfo = cmdBeginInfo;
-
-        m_Viewport.x        = 0.0f;
-        m_Viewport.y        = 0.0f;
-        m_Viewport.width    = static_cast<float>(m_Width);
-        m_Viewport.height   = static_cast<float>(m_Height);
-        m_Viewport.minDepth = 0.0f;
-        m_Viewport.maxDepth = 1.0f;
-
-        m_Scissor.offset = { 0, 0 };
-        m_Scissor.extent = { m_Width, m_Height };
-    }
-
-    // パイプラインキャッシュの生成.
-    {
-        VkPipelineCacheCreateInfo info = {};
-        info.sType           = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-        info.pNext           = nullptr;
-        info.initialDataSize = 0;
-        info.pInitialData    = nullptr;
-        info.flags           = 0;
-
-        auto result = vkCreatePipelineCache(m_Device, &info, nullptr, &m_PipelineCache);
-        if ( result != VK_SUCCESS )
-        {
-            ELOG( "Error : vkCreatePipelineCache() Failed." );
-            return false;
-        }
-    }
-
-    // パイプラインの生成.
-    {
-        VkDynamicState dynamicStateEnables[VK_DYNAMIC_STATE_RANGE_SIZE];
-
-        VkPipelineDynamicStateCreateInfo dynamicCreateInfo = {};
-        dynamicCreateInfo.sType              = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicCreateInfo.pNext              = nullptr;
-        dynamicCreateInfo.pDynamicStates     = dynamicStateEnables;
-        dynamicCreateInfo.dynamicStateCount  = 0;
-
-        VkPipelineVertexInputStateCreateInfo visCreateInfo = {};
-        visCreateInfo.sType                             = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        visCreateInfo.pNext                             = nullptr;
-        visCreateInfo.flags                             = 0;
-        visCreateInfo.vertexBindingDescriptionCount     = 0;
-        visCreateInfo.pVertexBindingDescriptions        = nullptr;
-        visCreateInfo.vertexAttributeDescriptionCount   = 0;
-        visCreateInfo.pVertexAttributeDescriptions      = nullptr;
-
-        VkPipelineInputAssemblyStateCreateInfo iasCreateInfo = {};
-        iasCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        iasCreateInfo.pNext                  = nullptr;
-        iasCreateInfo.flags                  = 0;
-        iasCreateInfo.primitiveRestartEnable = VK_FALSE;
-        iasCreateInfo.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-
-        VkPipelineRasterizationStateCreateInfo rsCreateInfo = {};
-        rsCreateInfo.sType                      = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rsCreateInfo.pNext                      = nullptr;
-        rsCreateInfo.polygonMode                = VK_POLYGON_MODE_FILL;
-        rsCreateInfo.cullMode                   = VK_CULL_MODE_BACK_BIT;
-        rsCreateInfo.frontFace                  = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-        rsCreateInfo.depthClampEnable           = VK_TRUE;
-        rsCreateInfo.rasterizerDiscardEnable    = VK_FALSE;
-        rsCreateInfo.depthBiasEnable            = VK_FALSE;
-        rsCreateInfo.depthBiasConstantFactor    = 0;
-        rsCreateInfo.depthBiasClamp             = 0;
-        rsCreateInfo.depthBiasSlopeFactor       = 0;
-        rsCreateInfo.lineWidth                  = 0;
-
-        VkPipelineColorBlendAttachmentState cbaState;
-        cbaState.colorWriteMask         = 0xf;
-        cbaState.blendEnable            = VK_FALSE;
-        cbaState.alphaBlendOp           = VK_BLEND_OP_ADD;
-        cbaState.colorBlendOp           = VK_BLEND_OP_ADD;
-        cbaState.srcColorBlendFactor    = VK_BLEND_FACTOR_ZERO;
-        cbaState.dstColorBlendFactor    = VK_BLEND_FACTOR_ZERO;
-        cbaState.srcAlphaBlendFactor    = VK_BLEND_FACTOR_ZERO;
-        cbaState.dstAlphaBlendFactor    = VK_BLEND_FACTOR_ZERO;
-
-        VkPipelineColorBlendStateCreateInfo cbsCreateInfo = {};
-        cbsCreateInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        cbsCreateInfo.pNext             = nullptr;
-        cbsCreateInfo.flags             = 0;
-        cbsCreateInfo.attachmentCount   = 1;
-        cbsCreateInfo.pAttachments      = &cbaState;
-        cbsCreateInfo.logicOpEnable     = VK_FALSE;
-        cbsCreateInfo.logicOp           = VK_LOGIC_OP_NO_OP;
-        cbsCreateInfo.blendConstants[0] = 1.0f;
-        cbsCreateInfo.blendConstants[1] = 1.0f;
-        cbsCreateInfo.blendConstants[2] = 1.0f;
-        cbsCreateInfo.blendConstants[3] = 1.0f;
-
-        VkPipelineViewportStateCreateInfo vpsCreateInfo = {};
-        vpsCreateInfo.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        vpsCreateInfo.pNext         = nullptr;
-        vpsCreateInfo.flags         = 0;
-        vpsCreateInfo.viewportCount = 1;
-        vpsCreateInfo.scissorCount  = 1;
-        vpsCreateInfo.pViewports    = nullptr;
-        vpsCreateInfo.pScissors     = nullptr;
-
-        auto idx = 0;
-        dynamicStateEnables[idx++] = VK_DYNAMIC_STATE_VIEWPORT;
-        dynamicStateEnables[idx++] = VK_DYNAMIC_STATE_SCISSOR;
-
-        VkPipelineDepthStencilStateCreateInfo dsCreateInfo = {};
-        dsCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-        dsCreateInfo.pNext                  = nullptr;
-        dsCreateInfo.flags                  = 0;
-        dsCreateInfo.depthTestEnable        = VK_TRUE;
-        dsCreateInfo.depthWriteEnable       = VK_TRUE;
-        dsCreateInfo.depthCompareOp         = VK_COMPARE_OP_LESS_OR_EQUAL;
-        dsCreateInfo.depthBoundsTestEnable  = VK_FALSE;
-        dsCreateInfo.minDepthBounds         = 0;
-        dsCreateInfo.maxDepthBounds         = 0;
-        dsCreateInfo.stencilTestEnable      = VK_FALSE;
-        dsCreateInfo.back.failOp            = VK_STENCIL_OP_KEEP;
-        dsCreateInfo.back.passOp            = VK_STENCIL_OP_KEEP;
-        dsCreateInfo.back.compareOp         = VK_COMPARE_OP_ALWAYS;
-        dsCreateInfo.back.compareMask       = 0;
-        dsCreateInfo.back.reference         = 0;
-        dsCreateInfo.back.depthFailOp       = VK_STENCIL_OP_KEEP;
-        dsCreateInfo.front                  = dsCreateInfo.back;
-
-        VkPipelineMultisampleStateCreateInfo msCreateInfo = {};
-        msCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        msCreateInfo.pNext                  = nullptr;
-        msCreateInfo.flags                  = 0;
-        msCreateInfo.pSampleMask            = nullptr;
-        msCreateInfo.rasterizationSamples   = VK_SAMPLE_COUNT_1_BIT;
-        msCreateInfo.sampleShadingEnable    = VK_FALSE;
-        msCreateInfo.alphaToCoverageEnable  = VK_FALSE;
-        msCreateInfo.alphaToOneEnable       = VK_FALSE;
-        msCreateInfo.minSampleShading       = 0.0f;
-
-
-    }
-
     // コマンドを実行しておく.
     {
         auto result = vkEndCommandBuffer(m_CommandBuffers[m_BufferIndex]);
@@ -988,12 +814,6 @@ bool SampleApp::OnInit()
 //-------------------------------------------------------------------------------------------------
 void SampleApp::OnTerm()
 {
-    if(m_Pipeline != nullptr)
-    { vkDestroyPipeline(m_Device, m_Pipeline, nullptr); }
-
-    if (m_PipelineCache != nullptr)
-    { vkDestroyPipelineCache(m_Device, m_PipelineCache, nullptr); }
-
     for(auto i=0u; i<SwapChainCount; ++i)
     { vkDestroyFramebuffer(m_Device, m_FrameBuffers[i], nullptr); }
 
@@ -1046,15 +866,75 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
     ASVK_UNUSED(args);
     auto cmd = m_CommandBuffers[m_BufferIndex];
 
-    vkBeginCommandBuffer(cmd, &m_CommandBufferBeginInfo);
-    vkCmdBeginRenderPass(cmd, &m_RenderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+    // コマンド記録開始.
+    {
+        VkCommandBufferInheritanceInfo inheritanceInfo = {};
+        inheritanceInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+        inheritanceInfo.pNext                   = nullptr;
+        inheritanceInfo.renderPass              = nullptr;
+        inheritanceInfo.subpass                 = 0;
+        inheritanceInfo.framebuffer             = m_FrameBuffers[m_BufferIndex];
+        inheritanceInfo.occlusionQueryEnable    = VK_FALSE;
+        inheritanceInfo.queryFlags              = 0;
+        inheritanceInfo.pipelineStatistics      = 0;
 
-    vkCmdSetViewport(cmd, 0, 1, &m_Viewport);
-    vkCmdSetScissor (cmd, 0, 1, &m_Scissor);
+        VkCommandBufferBeginInfo cmdBeginInfo = {};
+        cmdBeginInfo.sType             = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        cmdBeginInfo.pNext             = nullptr;
+        cmdBeginInfo.flags             = 0;
+        cmdBeginInfo.pInheritanceInfo  = &inheritanceInfo;
 
-    vkCmdEndRenderPass(cmd);
-    vkEndCommandBuffer(cmd);
+        vkBeginCommandBuffer(cmd, &cmdBeginInfo);
+    }
 
+    // カラーバッファをクリア.
+    {
+        VkClearColorValue clearColor;
+        clearColor.float32[0] = 0.392156899f;
+        clearColor.float32[1] = 0.584313750f;
+        clearColor.float32[2] = 0.929411829f;
+        clearColor.float32[3] = 1.0f;
+
+        VkImageSubresourceRange range;
+        range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        range.baseMipLevel   = 0;
+        range.levelCount     = 1;
+        range.baseArrayLayer = 0;
+        range.layerCount     = 1;
+
+        vkCmdClearColorImage(
+            cmd,
+            m_BackBuffers[m_BufferIndex].Image,
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            &clearColor,
+            1,
+            &range);
+    }
+
+    // 深度バッファをクリア.
+    {
+        VkClearDepthStencilValue clearDepthStencil;
+        clearDepthStencil.depth   = 1.0f;
+        clearDepthStencil.stencil = 0;
+
+        VkImageSubresourceRange range;
+        range.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
+        range.baseMipLevel   = 0;
+        range.levelCount     = 1;
+        range.baseArrayLayer = 0;
+        range.layerCount     = 1;
+
+        vkCmdClearDepthStencilImage(
+            cmd,
+            m_Depth.Image,
+            VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            &clearDepthStencil,
+            1,
+            &range);
+    }
+
+
+    // リソースバリアの設定.
     {
         VkImageMemoryBarrier barrier = {};
         barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1085,6 +965,10 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
             &barrier);
     }
 
+    // コマンドの記録を終了.
+    vkEndCommandBuffer(cmd);
+
+    // コマンドを実行し，表示する.
     {
         VkPipelineStageFlags pipeStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
 
@@ -1099,11 +983,17 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
         info.signalSemaphoreCount   = 0;
         info.pSignalSemaphores      = nullptr;
 
+        // コマンドを実行.
         auto result = vkQueueSubmit(m_GraphicsQueue, 1, &info, m_GraphicsFence);
         if ( result != VK_SUCCESS )
         {
             ELOG( "Error : vkQueueSubmit() Failed." );
         }
+
+        // 完了を待機.
+        do {
+            result = vkWaitForFences(m_Device, 1, &m_GraphicsFence, VK_TRUE, TimeOutNanoSec);
+        } while( result == VK_TIMEOUT );
 
         VkPresentInfoKHR present = {};
         present.sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
@@ -1115,19 +1005,13 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
         present.waitSemaphoreCount  = 0;
         present.pResults            = nullptr;
 
-        do {
-            result = vkWaitForFences(m_Device, 1, &m_GraphicsFence, VK_TRUE, TimeOutNanoSec);
-        } while( result == VK_TIMEOUT );
-
+        // 表示.
         result = vkQueuePresentKHR(m_GraphicsQueue, &present);
         if ( result != VK_SUCCESS )
-        {
-            ELOG( "Error : vkQueuePresentKHR() Failed." );
-        }
-    }
+        { ELOG( "Error : vkQueuePresentKHR() Failed." ); }
 
-    {
-        auto result = vkAcquireNextImageKHR(
+        // 次の画像を取得.
+        result = vkAcquireNextImageKHR(
             m_Device,
             m_SwapChain,
             UINT64_MAX,
@@ -1135,8 +1019,6 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
             nullptr, 
             &m_BufferIndex);
         if ( result != VK_SUCCESS )
-        {
-            ELOG( "Error : vkAcquireNextImageKHR() Failed." );
-        }
+        { ELOG( "Error : vkAcquireNextImageKHR() Failed." ); }
     }
 }
