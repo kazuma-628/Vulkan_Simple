@@ -892,7 +892,6 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
             &range);
     }
 
-
     // リソースバリアの設定.
     {
         VkImageMemoryBarrier barrier = {};

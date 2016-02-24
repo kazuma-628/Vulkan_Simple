@@ -92,7 +92,6 @@ private:
     uint32_t                        m_BufferIndex;
     VkCommandPool                   m_CommandPool;
     std::vector<VkCommandBuffer>    m_CommandBuffers;
-    VkRenderPass                    m_RenderPass;
     DepthStencilBuffer              m_Depth;
     std::vector<VkFramebuffer>      m_FrameBuffers;
 
