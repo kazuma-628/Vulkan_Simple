@@ -230,7 +230,7 @@ bool SampleApp::OnInit()
         }
 
         VkDeviceQueueCreateInfo queueInfo;
-        float queuePriorities[] = { 0.0f, 0.0f };
+        float queuePriorities[] = { 0.0f };
         queueInfo.sType              = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
         queueInfo.pNext              = nullptr;
         queueInfo.queueCount         = 1;
@@ -295,7 +295,7 @@ bool SampleApp::OnInit()
         info.sType              = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         info.pNext              = nullptr;
         info.queueFamilyIndex   = m_GraphicsFamilyIndex;
-        info.flags              = 0;
+        info.flags              = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
         auto result = vkCreateCommandPool(m_Device, &info, nullptr, &m_CommandPool);
         if ( result != VK_SUCCESS )
