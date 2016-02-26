@@ -532,14 +532,15 @@ bool SampleApp::OnInit()
             VkImageViewCreateInfo viewInfo = {};
             viewInfo.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             viewInfo.pNext            = nullptr;
+            viewInfo.flags            = 0;
+            viewInfo.image            = m_BackBuffers[i].Image;
+            viewInfo.viewType         = VK_IMAGE_VIEW_TYPE_2D;
             viewInfo.format           = VK_FORMAT_R8G8B8A8_UNORM;
             viewInfo.components.r     = VK_COMPONENT_SWIZZLE_R;
             viewInfo.components.g     = VK_COMPONENT_SWIZZLE_G;
             viewInfo.components.b     = VK_COMPONENT_SWIZZLE_B;
             viewInfo.components.a     = VK_COMPONENT_SWIZZLE_A;
             viewInfo.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
-            viewInfo.flags            = 0;
-            viewInfo.image            = m_BackBuffers[i].Image;
 
             auto result = vkCreateImageView(m_Device, &viewInfo, nullptr, &m_BackBuffers[i].View);
             if ( result != VK_SUCCESS )
