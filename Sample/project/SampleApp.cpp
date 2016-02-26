@@ -365,6 +365,9 @@ bool SampleApp::OnInit()
         }
     }
 
+    VkFormat        imageFormat     = VK_FORMAT_R8G8B8A8_UNORM;
+    VkColorSpaceKHR imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
+
     // スワップチェインの生成.
     {
         uint32_t count  = 0;
@@ -383,9 +386,6 @@ bool SampleApp::OnInit()
             ELOG( "Error : vkGetPhysicalDeviceSUrfaceFormatsKHR() Failed." );
             return false;
         }
-
-        VkFormat        imageFormat     = VK_FORMAT_R8G8B8A8_UNORM;
-        VkColorSpaceKHR imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 
         bool isFind = false;
         for(size_t i=0; i<formats.size(); ++i)
@@ -535,7 +535,7 @@ bool SampleApp::OnInit()
             viewInfo.flags            = 0;
             viewInfo.image            = m_BackBuffers[i].Image;
             viewInfo.viewType         = VK_IMAGE_VIEW_TYPE_2D;
-            viewInfo.format           = VK_FORMAT_R8G8B8A8_UNORM;
+            viewInfo.format           = imageFormat;
             viewInfo.components.r     = VK_COMPONENT_SWIZZLE_R;
             viewInfo.components.g     = VK_COMPONENT_SWIZZLE_G;
             viewInfo.components.b     = VK_COMPONENT_SWIZZLE_B;
