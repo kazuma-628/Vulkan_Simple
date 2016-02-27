@@ -726,16 +726,12 @@ bool SampleApp::OnInit()
         info.signalSemaphoreCount   = 0;
         info.pSignalSemaphores      = nullptr;
 
-        result = vkQueueSubmit(m_GraphicsQueue, 1, &info, m_GraphicsFence);
+        result = vkQueueSubmit(m_GraphicsQueue, 1, &info, nullptr);
         if ( result != VK_SUCCESS )
         {
             ELOG( "Error : vkQueueSubmit() Failed." );
             return false;
         }
-
-        do {
-            result = vkWaitForFences(m_Device, 1, &m_GraphicsFence, VK_TRUE, TimeOutNanoSec);
-        } while( result == VK_TIMEOUT );
 
         result = vkQueueWaitIdle(m_GraphicsQueue);
         if ( result != VK_SUCCESS )
