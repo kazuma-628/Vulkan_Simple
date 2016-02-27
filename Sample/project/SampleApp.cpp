@@ -893,36 +893,21 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
 
     // リソースバリアの設定.
     {
-        VkImageMemoryBarrier barrier[2];
-        barrier[0].sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier[0].pNext                           = nullptr;
-        barrier[0].srcAccessMask                   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        barrier[0].dstAccessMask                   = VK_ACCESS_MEMORY_READ_BIT;
-        barrier[0].oldLayout                       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier[0].newLayout                       = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        barrier[0].srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        barrier[0].dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        barrier[0].subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier[0].subresourceRange.baseMipLevel   = 0;
-        barrier[0].subresourceRange.levelCount     = 1;
-        barrier[0].subresourceRange.baseArrayLayer = 0;
-        barrier[0].subresourceRange.layerCount     = 1;
-        barrier[0].image                           = m_BackBuffers[m_BufferIndex].Image;
-
-        barrier[1].sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier[1].pNext                           = nullptr;
-        barrier[1].srcAccessMask                   = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-        barrier[1].dstAccessMask                   = VK_ACCESS_MEMORY_READ_BIT;
-        barrier[1].oldLayout                       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        barrier[1].newLayout                       = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        barrier[1].srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        barrier[1].dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
-        barrier[1].subresourceRange.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
-        barrier[1].subresourceRange.baseMipLevel   = 0;
-        barrier[1].subresourceRange.levelCount     = 1;
-        barrier[1].subresourceRange.baseArrayLayer = 0;
-        barrier[1].subresourceRange.layerCount     = 1;
-        barrier[1].image                           = m_Depth.Image;
+        VkImageMemoryBarrier barrier;
+        barrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.pNext                           = nullptr;
+        barrier.srcAccessMask                   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier.dstAccessMask                   = VK_ACCESS_MEMORY_READ_BIT;
+        barrier.oldLayout                       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier.newLayout                       = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        barrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier.subresourceRange.baseMipLevel   = 0;
+        barrier.subresourceRange.levelCount     = 1;
+        barrier.subresourceRange.baseArrayLayer = 0;
+        barrier.subresourceRange.layerCount     = 1;
+        barrier.image                           = m_BackBuffers[m_BufferIndex].Image;
 
         vkCmdPipelineBarrier(
             cmd,
@@ -933,8 +918,8 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
             nullptr,
             0,
             nullptr,
-            2,
-            barrier);
+            1,
+            &barrier);
     }
 
     // コマンドの記録を終了.
