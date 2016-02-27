@@ -983,6 +983,11 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
         else if (result == VK_TIMEOUT)
         { ELOG( "Error : vkWaitForFences() Timeout." ); }
 
+        // フェンスをリセット.
+        result = vkResetFences(m_Device, 1, &m_GraphicsFence );
+        if ( result != VK_SUCCESS )
+        { ELOG( "Error : vkResetFences() Failed."); }
+
         // 次の画像を取得.
         result = vkAcquireNextImageKHR(
             m_Device,
