@@ -1,6 +1,6 @@
 # Vulkan_Simple
 フレームバッファを表示するだけの簡単なサンプルです。  
-プログラムの解説は http://www.project-asura/program/vulkan/vulkan_001.html を参照してください。  
+プログラムの解説は http://www.project-asura.com/program/vulkan/vulkan_001.htmlを参照してください。  
   
 ![キャプチャー画像](./result.png)
 
