@@ -580,6 +580,7 @@ bool SampleApp::OnInit()
         VkImageCreateInfo info = {};
         info.sType                  = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
         info.pNext                  = nullptr;
+        info.flags                  = 0;
         info.imageType              = VK_IMAGE_TYPE_2D;
         info.format                 = depthFormat;
         info.extent.width           = m_Width;
@@ -589,11 +590,11 @@ bool SampleApp::OnInit()
         info.arrayLayers            = 1;
         info.samples                = VK_SAMPLE_COUNT_1_BIT;
         info.tiling                 = tiling;
-        info.initialLayout          = VK_IMAGE_LAYOUT_UNDEFINED;
+        info.usage                  = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        info.sharingMode            = VK_SHARING_MODE_EXCLUSIVE;
         info.queueFamilyIndexCount  = 0;
         info.pQueueFamilyIndices    = nullptr;
-        info.sharingMode            = VK_SHARING_MODE_EXCLUSIVE;
-        info.flags                  = 0;
+        info.initialLayout          = VK_IMAGE_LAYOUT_UNDEFINED;
 
         auto result = vkCreateImage(m_Device, &info, nullptr, &m_Depth.Image);
         if (result != VK_SUCCESS)
