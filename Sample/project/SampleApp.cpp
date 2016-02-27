@@ -958,29 +958,30 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
         // コマンドを実行.
         auto result = vkQueueSubmit(m_GraphicsQueue, 1, &info, m_GraphicsFence);
         if ( result != VK_SUCCESS )
-        {
-            ELOG( "Error : vkQueueSubmit() Failed." );
-        }
+        { ELOG( "Error : vkQueueSubmit() Failed." ); }
 
         // 完了を待機.
-        do {
-            result = vkWaitForFences(m_Device, 1, &m_GraphicsFence, VK_TRUE, TimeOutNanoSec);
-        } while( result == VK_TIMEOUT );
+        result = vkWaitForFences(m_Device, 1, &m_GraphicsFence, VK_TRUE, TimeOutNanoSec);
 
-        VkPresentInfoKHR present = {};
-        present.sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-        present.pNext               = nullptr;
-        present.swapchainCount      = 1;
-        present.pSwapchains         = &m_SwapChain;
-        present.pImageIndices       = &m_BufferIndex;
-        present.pWaitSemaphores     = nullptr;
-        present.waitSemaphoreCount  = 0;
-        present.pResults            = nullptr;
+        // 成功したら表示.
+        if ( result == VK_SUCCESS )
+        {
+            VkPresentInfoKHR present = {};
+            present.sType               = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            present.pNext               = nullptr;
+            present.swapchainCount      = 1;
+            present.pSwapchains         = &m_SwapChain;
+            present.pImageIndices       = &m_BufferIndex;
+            present.pWaitSemaphores     = nullptr;
+            present.waitSemaphoreCount  = 0;
+            present.pResults            = nullptr;
 
-        // 表示.
-        result = vkQueuePresentKHR(m_GraphicsQueue, &present);
-        if ( result != VK_SUCCESS )
-        { ELOG( "Error : vkQueuePresentKHR() Failed." ); }
+            result = vkQueuePresentKHR(m_GraphicsQueue, &present);
+            if ( result != VK_SUCCESS )
+            { ELOG( "Error : vkQueuePresentKHR() Failed." ); }
+        }
+        else if (result == VK_TIMEOUT)
+        { ELOG( "Error : vkWaitForFences() Timeout." ); }
 
         // 次の画像を取得.
         result = vkAcquireNextImageKHR(
