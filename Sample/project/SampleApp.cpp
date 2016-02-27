@@ -682,6 +682,7 @@ bool SampleApp::OnInit()
         VkFramebufferCreateInfo info = {};
         info.sType              = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         info.pNext              = nullptr;
+        info.flags              = 0;
         info.renderPass         = nullptr;
         info.attachmentCount    = 2;
         info.pAttachments       = attachments;
