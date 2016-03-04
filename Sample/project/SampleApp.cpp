@@ -125,13 +125,13 @@ SampleApp::SampleApp()
 , m_Instance            (nullptr)
 , m_Device              (nullptr)
 , m_GraphicsQueue       (nullptr)
-, m_GraphicsFence       (nullptr)
-, m_GraphicsSemaphore   (nullptr)
+, m_GraphicsFence       (VK_NULL_HANDLE)
+, m_GraphicsSemaphore   (VK_NULL_HANDLE)
 , m_GraphicsFamilyIndex (0)
-, m_Surface             (nullptr)
-, m_SwapChain           (nullptr)
+, m_Surface             (VK_NULL_HANDLE)
+, m_SwapChain           (VK_NULL_HANDLE)
 , m_BufferIndex         (0)
-, m_CommandPool         (nullptr)
+, m_CommandPool         (VK_NULL_HANDLE)
 { /* DO_NOTHING */ }
 
 //-------------------------------------------------------------------------------------------------
@@ -327,9 +327,9 @@ bool SampleApp::OnInit()
         VkCommandBufferInheritanceInfo inheritanceInfo = {};
         inheritanceInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
         inheritanceInfo.pNext                   = nullptr;
-        inheritanceInfo.renderPass              = nullptr;
+        inheritanceInfo.renderPass              = VK_NULL_HANDLE;
         inheritanceInfo.subpass                 = 0;
-        inheritanceInfo.framebuffer             = nullptr;
+        inheritanceInfo.framebuffer             = VK_NULL_HANDLE;
         inheritanceInfo.occlusionQueryEnable    = VK_FALSE;
         inheritanceInfo.queryFlags              = 0;
         inheritanceInfo.pipelineStatistics      = 0;
@@ -487,7 +487,7 @@ bool SampleApp::OnInit()
             createInfo.compositeAlpha           = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
             createInfo.presentMode              = presentMode;
             createInfo.clipped                  = VK_TRUE;
-            createInfo.oldSwapchain             = nullptr;
+            createInfo.oldSwapchain             = VK_NULL_HANDLE;
 
             auto result = vkCreateSwapchainKHR(m_Device, &createInfo, nullptr, &m_SwapChain);
             if ( result != VK_SUCCESS )
@@ -683,7 +683,7 @@ bool SampleApp::OnInit()
         info.sType              = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         info.pNext              = nullptr;
         info.flags              = 0;
-        info.renderPass         = nullptr;
+        info.renderPass         = VK_NULL_HANDLE;
         info.attachmentCount    = 2;
         info.pAttachments       = attachments;
         info.width              = m_Width;
@@ -726,7 +726,7 @@ bool SampleApp::OnInit()
         info.signalSemaphoreCount   = 0;
         info.pSignalSemaphores      = nullptr;
 
-        result = vkQueueSubmit(m_GraphicsQueue, 1, &info, nullptr);
+        result = vkQueueSubmit(m_GraphicsQueue, 1, &info, VK_NULL_HANDLE);
         if ( result != VK_SUCCESS )
         {
             ELOG( "Error : vkQueueSubmit() Failed." );
@@ -748,7 +748,7 @@ bool SampleApp::OnInit()
             m_SwapChain,
             UINT64_MAX,
             m_GraphicsSemaphore,
-            nullptr, 
+            VK_NULL_HANDLE, 
             &m_BufferIndex);
         if ( result != VK_SUCCESS )
         {
@@ -767,37 +767,37 @@ void SampleApp::OnTerm()
     for(auto i=0u; i<SwapChainCount; ++i)
     { vkDestroyFramebuffer(m_Device, m_FrameBuffers[i], nullptr); }
 
-    if (m_Depth.View != nullptr)
+    if (m_Depth.View != VK_NULL_HANDLE)
     { vkDestroyImageView(m_Device, m_Depth.View, nullptr); }
 
-    if (m_Depth.Image != nullptr)
+    if (m_Depth.Image != VK_NULL_HANDLE)
     { vkDestroyImage(m_Device, m_Depth.Image, nullptr); }
 
-    if (m_Depth.Memory != nullptr)
+    if (m_Depth.Memory != VK_NULL_HANDLE)
     { vkFreeMemory(m_Device, m_Depth.Memory, nullptr); }
 
     if (!m_CommandBuffers.empty())
     { vkFreeCommandBuffers(m_Device, m_CommandPool, SwapChainCount, m_CommandBuffers.data()); }
 
-    if (m_CommandPool != nullptr)
+    if (m_CommandPool != VK_NULL_HANDLE)
     { vkDestroyCommandPool(m_Device, m_CommandPool, nullptr); }
 
-    if (m_GraphicsSemaphore != nullptr)
+    if (m_GraphicsSemaphore != VK_NULL_HANDLE)
     { vkDestroySemaphore(m_Device, m_GraphicsSemaphore, nullptr); }
 
-    if (m_GraphicsFence != nullptr)
+    if (m_GraphicsFence != VK_NULL_HANDLE)
     { vkDestroyFence(m_Device, m_GraphicsFence, nullptr); }
 
-    if (m_SwapChain != nullptr)
+    if (m_SwapChain != VK_NULL_HANDLE)
     { vkDestroySwapchainKHR(m_Device, m_SwapChain, nullptr); }
 
-    if (m_Surface != nullptr)
+    if (m_Surface != VK_NULL_HANDLE)
     { vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr); }
 
-    if (m_Device != nullptr)
+    if (m_Device != VK_NULL_HANDLE)
     { vkDestroyDevice(m_Device, nullptr); }
 
-    if (m_Instance != nullptr)
+    if (m_Instance != VK_NULL_HANDLE)
     { vkDestroyInstance(m_Instance, &m_AllocatorCallbacks); }
 
     m_FrameBuffers  .clear();
@@ -806,14 +806,14 @@ void SampleApp::OnTerm()
 
     m_GraphicsFamilyIndex = 0;
 
-    m_Surface           = nullptr;
-    m_SwapChain         = nullptr;
-    m_CommandPool       = nullptr;
-    m_GraphicsSemaphore = nullptr;
-    m_GraphicsFence     = nullptr;
-    m_GraphicsQueue     = nullptr;
-    m_Device            = nullptr;
-    m_Instance          = nullptr;
+    m_Surface           = VK_NULL_HANDLE;
+    m_SwapChain         = VK_NULL_HANDLE;
+    m_CommandPool       = VK_NULL_HANDLE;
+    m_GraphicsSemaphore = VK_NULL_HANDLE;
+    m_GraphicsFence     = VK_NULL_HANDLE;
+    m_GraphicsQueue     = VK_NULL_HANDLE;
+    m_Device            = VK_NULL_HANDLE;
+    m_Instance          = VK_NULL_HANDLE;
 }
 
 //-------------------------------------------------------------------------------------------------
@@ -829,7 +829,7 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
         VkCommandBufferInheritanceInfo inheritanceInfo = {};
         inheritanceInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
         inheritanceInfo.pNext                   = nullptr;
-        inheritanceInfo.renderPass              = nullptr;
+        inheritanceInfo.renderPass              = VK_NULL_HANDLE;
         inheritanceInfo.subpass                 = 0;
         inheritanceInfo.framebuffer             = m_FrameBuffers[m_BufferIndex];
         inheritanceInfo.occlusionQueryEnable    = VK_FALSE;
@@ -977,9 +977,9 @@ void SampleApp::OnFrameRender(const asvk::FrameEventArgs& args)
         result = vkAcquireNextImageKHR(
             m_Device,
             m_SwapChain,
-            UINT64_MAX,
+            TimeOutNanoSec,
             m_GraphicsSemaphore,
-            nullptr, 
+            VK_NULL_HANDLE, 
             &m_BufferIndex);
         if ( result != VK_SUCCESS )
         { ELOG( "Error : vkAcquireNextImageKHR() Failed." ); }
