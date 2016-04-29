@@ -158,7 +158,7 @@ bool SampleApp::OnInit()
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName        = "asvk";
         appInfo.engineVersion      = ASVK_CURRENT_VERSION_NUMBER;
-        appInfo.apiVersion         = VK_API_VERSION;
+        appInfo.apiVersion         = VK_API_VERSION_1_0;
 
         VkInstanceCreateInfo instanceInfo = {};
         instanceInfo.sType                      = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
